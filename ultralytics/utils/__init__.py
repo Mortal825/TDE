@@ -27,7 +27,8 @@ from ultralytics import __version__
 # PyTorch Multi-GPU DDP Constants
 RANK = int(os.getenv('RANK', -1))
 LOCAL_RANK = int(os.getenv('LOCAL_RANK', -1))  # https://pytorch.org/docs/stable/elastic/run.html
-
+print(f"RANK = {RANK}")
+print(f"LOCAL_RANK = {LOCAL_RANK}")
 # Other Constants
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[1]  # YOLO

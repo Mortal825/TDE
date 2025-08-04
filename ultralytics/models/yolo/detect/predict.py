@@ -35,6 +35,7 @@ class DetectionPredictor(BasePredictor):
         results = []
         for i, pred in enumerate(preds):
             orig_img = orig_imgs[i]
+            print("shape",orig_img.shape)
             pred[:, :4] = ops.scale_boxes(img.shape[2:], pred[:, :4], orig_img.shape)
             img_path = self.batch[0][i]
             results.append(Results(orig_img, path=img_path, names=self.model.names, boxes=pred))

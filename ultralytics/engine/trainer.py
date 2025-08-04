@@ -15,6 +15,7 @@ from copy import deepcopy
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import pynvml
 import numpy as np
 import torch
 from torch import distributed as dist
@@ -34,7 +35,7 @@ from ultralytics.utils.files import get_latest_run
 from ultralytics.utils.torch_utils import (EarlyStopping, ModelEMA, de_parallel, init_seeds, one_cycle, select_device,
                                            strip_optimizer)
 
-from spikingjelly.clock_driven import functional
+from spikingjelly.activation_based import functional
 
 class BaseTrainer:
     """
@@ -83,7 +84,9 @@ class BaseTrainer:
         """
         self.args = get_cfg(cfg, overrides)
         self.check_resume(overrides)
+        print(f"self.device  = {self.args.device}")
         self.device = select_device(self.args.device, self.args.batch)
+        print(f"self.device = {self.device}")
         self.validator = None
         self.model = None
         self.metrics = None
@@ -168,8 +171,10 @@ class BaseTrainer:
         else:  # i.e. device='cpu' or 'mps'
             world_size = 0
 
+
         # Run subprocess if DDP training, else train normally
         if world_size > 1 and 'LOCAL_RANK' not in os.environ:
+            print("xixxi")
             # Argument checks
             if self.args.rect:
                 LOGGER.warning("WARNING ⚠️ 'rect=True' is incompatible with Multi-GPU training, setting 'rect=False'")
@@ -190,10 +195,13 @@ class BaseTrainer:
                 ddp_cleanup(self, str(file))
 
         else:
+            # exit()
+            print("hahahah")
             self._do_train(world_size)
 
     def _setup_ddp(self, world_size):
         """Initializes and sets the DistributedDataParallel parameters for training."""
+        # print(f"world_size = {world_size}")
         torch.cuda.set_device(RANK)
         self.device = torch.device('cuda', RANK)
         # LOGGER.info(f'DDP info: RANK {RANK}, WORLD_SIZE {world_size}, DEVICE {self.device}')
@@ -203,6 +211,30 @@ class BaseTrainer:
             timeout=timedelta(seconds=10800),  # 3 hours
             rank=RANK,
             world_size=world_size)
+        
+        # # 初始化NVML
+        # pynvml.nvmlInit()
+
+        # # 获取GPU设备数量
+        # device_count = pynvml.nvmlDeviceGetCount()
+
+        # # 遍历所有GPU，打印每个GPU上的进程信息
+        # for i in range(device_count):
+        #     handle = pynvml.nvmlDeviceGetHandleByIndex(i)
+        #     print(f"GPU {i}: {pynvml.nvmlDeviceGetName(handle)}")
+            
+        #     # 获取GPU上的进程信息
+        #     processes = pynvml.nvmlDeviceGetComputeRunningProcesses(handle)
+        #     if processes:
+        #         for process in processes:
+        #             print(f"  Process ID: {process.pid}, Memory Used: {process.usedGpuMemory / 1024**2:.2f} MB")
+        #     else:
+        #         print("  No processes running.")
+
+        # # 关闭NVML
+        # pynvml.nvmlShutdown()
+
+
 
     def _setup_train(self, world_size):
         """Builds dataloaders and optimizer on correct rank process."""
@@ -286,8 +318,8 @@ class BaseTrainer:
         """Train completed, evaluate and plot if specified by arguments."""
         if world_size > 1:
             self._setup_ddp(world_size)
-        self._setup_train(world_size)
 
+        self._setup_train(world_size)        
         self.epoch_time = None
         self.epoch_time_start = time.time()
         self.train_time_start = time.time()
@@ -342,6 +374,7 @@ class BaseTrainer:
                 with torch.cuda.amp.autocast(self.amp):
                     batch = self.preprocess_batch(batch)
                     self.loss, self.loss_items = self.model(batch)
+                    # print(f"self.loss=  {self.loss}, self.loss_items = {self.loss_items}")
                     if RANK != -1:
                         self.loss *= world_size
                     self.tloss = (self.tloss * i + self.loss_items) / (i + 1) if self.tloss is not None \
@@ -376,7 +409,6 @@ class BaseTrainer:
                 warnings.simplefilter('ignore')  # suppress 'Detected lr_scheduler.step() before optimizer.step()'
                 self.scheduler.step()
             self.run_callbacks('on_train_epoch_end')
-
             if RANK in (-1, 0):
 
                 # Validation
@@ -407,7 +439,6 @@ class BaseTrainer:
                     self.stop = broadcast_list[0]
             if self.stop:
                 break  # must break all DDP ranks
-
         if RANK in (-1, 0):
             # Do final val with best.pt
             LOGGER.info(f'\n{epoch - self.start_epoch + 1} epochs completed in '
@@ -574,9 +605,10 @@ class BaseTrainer:
             try:
                 exists = isinstance(resume, (str, Path)) and Path(resume).exists()
                 last = Path(check_file(resume) if exists else get_latest_run())
-
+                print(f"last = {last}")
                 # Check that resume data YAML exists, otherwise strip to force re-download of dataset
                 ckpt_args = attempt_load_weights(last).args 
+                print(f"ckpt_args = {ckpt_args}")
                 ckpt_args['device'] = overrides['device']  # 卡号不变 1111
                 if not Path(ckpt_args['data']).exists():
                     ckpt_args['data'] = self.args.data
@@ -584,6 +616,7 @@ class BaseTrainer:
 
                 resume = True
                 self.args = get_cfg(ckpt_args)
+                print(f"self.args = {self.args}")
                 self.args.model = str(last)  # reinstate model
                 for k in 'imgsz', 'batch':  # allow arg updates to reduce memory on resume if crashed due to CUDA OOM
                     if k in overrides:

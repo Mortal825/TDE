@@ -32,7 +32,8 @@ from ultralytics.utils import LOGGER, TQDM, callbacks, colorstr, emojis
 from ultralytics.utils.checks import check_imgsz
 from ultralytics.utils.ops import Profile
 from ultralytics.utils.torch_utils import de_parallel, select_device, smart_inference_mode
-
+import ultralytics.nn.modules
+import importlib 
 
 class BaseValidator:
     """
@@ -157,6 +158,9 @@ class BaseValidator:
         self.init_metrics(de_parallel(model))
         self.jdict = []  # empty before each val
         for batch_i, batch in enumerate(bar):
+            # importlib.reload(ultralytics.nn.modules)
+            # alpha = ultralytics.nn.modules.alpha
+            # num_layer = ultralytics.nn.modules.num_layer
             self.run_callbacks('on_val_batch_start')
             self.batch_i = batch_i
             # Preprocess
@@ -171,7 +175,15 @@ class BaseValidator:
             with dt[2]:
                 if self.training:
                     self.loss += model.loss(batch, preds)[1]
-
+            # print(f"alpha ={alpha}")
+            # print(f"模型有多少层num_layer ={num_layer}")
+            # end_alpha = alpha/num_layer
+            # print(f"end_alpha ={end_alpha}")
+            # ultralytics.nn.modules.alpha = 0.0
+            # ultralytics.nn.modules.num_layer = 0
+            # importlib.reload(ultralytics.nn.modules)
+            # alpha = 0.0 
+            # num_layer = 0
             # Postprocess
             with dt[3]:
                 preds = self.postprocess(preds)

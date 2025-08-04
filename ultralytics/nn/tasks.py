@@ -3,7 +3,7 @@
 import contextlib
 from copy import deepcopy
 from pathlib import Path
-
+from collections import deque
 import torch
 import torch.nn as nn
 
@@ -11,7 +11,7 @@ from ultralytics.nn.modules import (AIFI, C1, C2, C3, C3TR, SPP, SPPF, Bottlenec
                                     Classify, Concat, Conv, Conv2, ConvTranspose, Detect, DWConv, DWConvTranspose2d,
                                     Focus, GhostBottleneck, GhostConv, HGBlock, HGStem, Pose, RepC3, RepConv,
                                     RTDETRDecoder, Segment,MS_GetT,MS_CancelT, MS_ConvBlock,  MS_DownSampling, MS_StandardConv,
-                                    SpikeSPPF,SpikeConv,SpikeDetect,MS_AllConvBlock)
+                                    SpikeSPPF,SpikeConv,SpikeDetect,MS_AllConvBlock,encoder_block,TemporalSpatialChannelAttention,Diff_GetT,SpikeDetect_TD,AuxSeg,Aux_SpikeDetect_TD,Att_MS_ConvBlock,Att_MS_AllConvBlock,att_MS_ConvBlock,att_MS_AllConvBlock,Co_Diff_GetT)
 # from ultralytics.nn.modules import *
 from ultralytics.utils import DEFAULT_CFG_DICT, DEFAULT_CFG_KEYS, LOGGER, colorstr, emojis, yaml_load
 from ultralytics.utils.checks import check_requirements, check_suffix, check_yaml
@@ -20,9 +20,9 @@ from ultralytics.utils.plotting import feature_visualization
 from ultralytics.utils.torch_utils import (fuse_conv_and_bn, fuse_deconv_and_bn, initialize_weights, intersect_dicts,
                                            make_divisible, model_info, scale_img, time_sync)
 
-from spikingjelly.clock_driven import functional
+from spikingjelly.activation_based import functional
 
-
+from ultralytics.nn.modules.yolo_spikformer import mem_update,getmem_update
 try:
     import thop
 except ImportError:
@@ -63,6 +63,23 @@ class BaseModel(nn.Module):
             return self._predict_augment(x)
         return self._predict_once(x, profile, visualize)
 
+    def average_scheme(self,queue):
+        averaged_data = []
+        for i in range(4):  # 遍历每个数据的4个张量
+            tensor_stack = torch.stack([data[i] for data in queue])  # 提取所有10个数据的第i个张量
+            avg_tensor = torch.mean(tensor_stack, dim=0)  # 对10个数据的第i个张量求平均
+            averaged_data.append(avg_tensor)
+        return averaged_data
+
+    # 方案2：对每个张量的数据应用指数衰减加权
+    def exponential_decay_scheme(self,queue, alpha=0.3):
+        weighted_data = []
+        for i in range(4):  # 遍历每个数据的4个张量
+            tensor_stack = torch.stack([data[i] for data in queue])  # 提取所有10个数据的第i个张量
+            weighted_tensor = sum(alpha ** (len(queue) - j - 1) * tensor_stack[j] for j in range(len(queue)))  # 应用指数衰减权重
+            weighted_data.append(weighted_tensor)
+        return weighted_data
+
     def _predict_once(self, x, profile=False, visualize=False):
         """
         Perform a forward pass through the network.
@@ -82,8 +99,43 @@ class BaseModel(nn.Module):
                 x = y[m.f] if isinstance(m.f, int) else [x if j == -1 else y[j] for j in m.f]  # from earlier layers
             if profile:
                 self._profile_one_layer(m, x, dt)
-#             print("m:",m)
-            x = m(x)  # run
+            if(m.__class__.__name__ == "Co_Diff_GetT"):
+                # x = m(x)
+
+                ## 联合注意力版本1
+                if self.training:
+                    if(self.lenqueue < 10):
+                        self.lenqueue += 1
+                        x = m(x,self.shared_params)                        
+                        self.past_data.append(self.shared_params)
+                        self.shared_params = [torch.tensor(0.0) for _ in self.shared_params]
+                    else:
+                        self.past_data.append(self.shared_params)
+                        self.shared_params = self.average_scheme(self.past_data)
+                        x = m(x,self.shared_params)
+
+                        for i, param in enumerate(self.attention):
+                            param.data = self.shared_params[i].clone().to(x.device)
+
+                        self.shared_params = [torch.tensor(0.0) for _ in self.shared_params]
+                else:
+                    self.shared_params = [
+                        param.clone().detach()  # 创建一个副本，并确保不会参与梯度更新
+                        for param in self.attention
+                    ]
+                    x = m(x,self.shared_params)
+
+                ## 联合注意力版本2
+                # x = m(x,self.shared_params)
+                # self.shared_params = [torch.tensor(0.0) for _ in self.shared_params]
+            elif(m.__class__.__name__ == "Diff_GetT"):
+                x = m(x)
+            elif(m.__class__.__name__ == "Att_MS_ConvBlock"):
+                x = m(x,self.shared_params)
+            elif(m.__class__.__name__ == "Att_MS_AllConvBlock"):
+                x = m(x,self.shared_params)
+            else:
+                x = m(x)  # run
             y.append(x if m.i in self.save else None)  # save output
             if visualize:
                 feature_visualization(x, m.type, m.i, save_dir=visualize)
@@ -184,7 +236,7 @@ class BaseModel(nn.Module):
         """
         self = super()._apply(fn)
         m = self.model[-1]  # Detect()
-        if isinstance(m, (Detect, Segment,SpikeDetect)):
+        if isinstance(m, (Detect, Segment,SpikeDetect,SpikeDetect_TD,Aux_SpikeDetect_TD)):
             m.stride = fn(m.stride)
             m.anchors = fn(m.anchors)
             m.strides = fn(m.strides)
@@ -224,6 +276,7 @@ class BaseModel(nn.Module):
         raise NotImplementedError('compute_loss() needs to be implemented by task heads')
 
 
+
 class DetectionModel(BaseModel):
     """YOLOv8 detection model."""
 
@@ -231,6 +284,25 @@ class DetectionModel(BaseModel):
         """Initialize the YOLOv8 detection model with the given config and parameters."""
         super().__init__()
         self.yaml = cfg if isinstance(cfg, dict) else yaml_model_load(cfg)  # cfg dict
+        self.past_data = deque(maxlen=10) 
+        self.lenqueue = 0
+
+
+        # 初始化常数值
+        self.shared_params = [
+            torch.tensor(1.0),
+            torch.tensor(1.0),
+            torch.tensor(1.0),
+            torch.tensor(1.0),
+        ]
+
+        # 初始化并注册为 buffer（不训练）
+        for i, v in enumerate([1.0, 1.0, 1.0, 1.0]):
+            self.register_buffer(f"attention_{i}", torch.tensor(v))
+
+        # 将它们存入 self.attention 列表
+        self.attention = [getattr(self, f"attention_{i}") for i in range(4)]
+
 
         # Define model
         ch = self.yaml['ch'] = self.yaml.get('ch', ch)  # input channels
@@ -244,11 +316,30 @@ class DetectionModel(BaseModel):
 
         # Build strides
         m = self.model[-1]  # Detect()
-        if isinstance(m, (Detect, Segment, Pose,SpikeDetect)):
-            s = 256  # 2x min stride
+        if isinstance(m, (Detect, Segment, Pose,SpikeDetect,SpikeDetect_TD,Aux_SpikeDetect_TD)):
+            ## 测试模型参数
+            s = 640  # 2x min stride
             m.inplace = self.inplace
             forward = lambda x: self.forward(x)[0] if isinstance(m, (Segment, Pose)) else self.forward(x)
             m.stride = torch.tensor([s / x.shape[-2] for x in forward(torch.zeros(1, ch, s, s).cuda())])  # forward
+            with torch.no_grad():
+                # Perform forward pass with a dummy tensor of shape (4, ch, s, s)
+                dummy_input = torch.zeros(2, ch, s, s).cuda()  # Create tensor on GPU
+                output = forward(dummy_input)  # Perform forward pass
+                
+                # Calculate the stride
+                m.stride = torch.tensor([s / x.shape[-2] for x in output[0:3]])  # Calculate stride
+                
+                # Print stride for debugging
+                print(f"m.stride = {m.stride}")
+
+            # Now, manually delete the tensors to free up memory
+            del dummy_input  # Delete the dummy tensor
+            del output  # Delete the output from the forward pass
+
+            # Optionally, call torch.cuda.empty_cache() to release unused memory
+            torch.cuda.empty_cache()  # Clear the cache
+            print(f"m.stride = {m.stride}")
             self.stride = m.stride
             m.bias_init()  # only run once
         else:
@@ -615,7 +706,7 @@ def attempt_load_weights(weights, device=None, inplace=True, fuse=False):
     # Module updates
     for m in ensemble.modules():
         t = type(m)
-        if t in (nn.Hardswish, nn.LeakyReLU, nn.ReLU, nn.ReLU6, nn.SiLU, Detect,SpikeDetect, Segment):
+        if t in (nn.Hardswish, nn.LeakyReLU, nn.ReLU, nn.ReLU6, nn.SiLU, Detect,SpikeDetect, Segment,SpikeDetect_TD,Aux_SpikeDetect_TD):
             m.inplace = inplace
         elif t is nn.Upsample and not hasattr(m, 'recompute_scale_factor'):
             m.recompute_scale_factor = None  # torch 1.11.0 compatibility
@@ -651,7 +742,7 @@ def attempt_load_one_weight(weight, device=None, inplace=True, fuse=False):
     # Module updates
     for m in model.modules():
         t = type(m)
-        if t in (nn.Hardswish, nn.LeakyReLU, nn.ReLU, nn.ReLU6, nn.SiLU, Detect,SpikeDetect, Segment):
+        if t in (nn.Hardswish, nn.LeakyReLU, nn.ReLU, nn.ReLU6, nn.SiLU, Detect,SpikeDetect, Segment,SpikeDetect_TD,Aux_SpikeDetect_TD):
             m.inplace = inplace
         elif t is nn.Upsample and not hasattr(m, 'recompute_scale_factor'):
             m.recompute_scale_factor = None  # torch 1.11.0 compatibility
@@ -716,8 +807,14 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             args = [ch[f]]
         elif m is Concat:
             c2 = sum(ch[x] for x in f)
-        elif m in (Detect, Segment, Pose,SpikeDetect):
+        elif m in (Detect, Segment, Pose,SpikeDetect,SpikeDetect_TD):
             args.append([ch[x] for x in f])
+            if m is Segment:
+                args[2] = make_divisible(min(args[2], max_channels) * width, 8)
+        elif m is Aux_SpikeDetect_TD:
+            c1 = sum(ch[x] for x in f)
+            args.append([ch[x] for x in f])
+            args = [c1, *args[0:]]
             if m is Segment:
                 args[2] = make_divisible(min(args[2], max_channels) * width, 8)
         elif m is RTDETRDecoder:  # special case, channels arg must be passed in index 1
@@ -735,26 +832,81 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
         elif m is MS_DownSampling:
             c1 = ch[f] #输入通道数
             c2 = int(args[0]* width) #输出通道数
+            # print(f"c1 = {c1} c2 = {c2} width = {width} input = {args[0]}")
+            args = [c1,c2,*args[1:]]
+
+        elif m is Diff_GetT:
+            c1 = ch[f] #输入通道数
+            c2 = int(args[0]* width) #输出通道数
+            # print(f"c1 = {c1} c2 = {c2} width = {width} input = {args[0]}")
+            args = [c1,c2,*args[1:]]
+            
+        elif m is Co_Diff_GetT:
+            c1 = ch[f] #输入通道数
+            c2 = int(args[0]* width) #输出通道数
+            # print(f"c1 = {c1} c2 = {c2} width = {width} input = {args[0]}")
             args = [c1,c2,*args[1:]]
 
         elif m is MS_ConvBlock:
+            # print(f"args = {args}")
             c1 = ch[f]  # 输入通道数
             c2 = c1 #输出通道数与输入通道数相同
             args = [c1, *args[0:]]
+            # print(f"args = {args}")
+
+        elif m is att_MS_ConvBlock:
+            # print(f"args = {args}")
+            c1 = ch[f]  # 输入通道数
+            c2 = c1 #输出通道数与输入通道数相同
+            args = [c1, *args[0:]]
+            # print(f"args = {args}")
+
+        elif m is Att_MS_ConvBlock:
+            # print(f"args = {args}")
+            c1 = ch[f]  # 输入通道数
+            c2 = c1 #输出通道数与输入通道数相同
+            args = [c1, *args[0:]]
+            # print(f"args = {args}")
+
+        elif m is encoder_block:
+            # print(f"args = {args}")
+            c1 = ch[f]  # 输入通道数
+            c2 = c1 #输出通道数与输入通道数相同
+            args = [c1, *args[0:]]
+            # print(f"args = {args}")
+
+        elif m is TemporalSpatialChannelAttention:
+            c1 = ch[f]  # 输入通道数
+            c2 = c1 #输出通道数与输入通道数相同
+            args = [args[0],c1]
+            # print(f"args = {args}")
 
         elif m is MS_AllConvBlock:
             c1 = ch[f]  # 输入通道数
             c2 = c1 #输出通道数与输入通道数相同
             args = [c1, *args[0:]]
-            
+            print(f"MS_AllConvBlockargs = {args}")
 
+        elif m is Att_MS_AllConvBlock:
+            c1 = ch[f]  # 输入通道数
+            c2 = c1 #输出通道数与输入通道数相同
+            args = [c1, *args[0:]]
+            print(f"Att_MS_AllConvBlockargs = {args}")
+
+        elif m is att_MS_AllConvBlock:
+            c1 = ch[f]  # 输入通道数
+            c2 = c1 #输出通道数与输入通道数相同
+            args = [c1, *args[0:]]
+            print(f"Att_MS_AllConvBlockargs = {args}")
+            
+        elif m is AuxSeg:
+            c1 = sum(ch[x] for x in f)
+            args = [c1, *args[0:]]
 
         elif m is MS_StandardConv:
             c1 = ch[f]  # 输入通道数
             c2 = min(int(args[0]* width),int(max_channels* width))
             args = [c1, c2, *args[1:]]
-
-
 
         else:
             c2 = ch[f]
@@ -830,7 +982,7 @@ def guess_model_task(model):
             return 'classify'
         if m == 'detect':
             return 'detect'
-        if m == 'spikedetect':
+        if m == 'spikedetect' or 'SpikeDetect_TD' or 'Aux_SpikeDetect_TD':
             return 'detect'
         if m == 'segment':
             return 'segment'
@@ -855,6 +1007,10 @@ def guess_model_task(model):
             if isinstance(m, Detect):
                 return 'detect'
             if isinstance(m, SpikeDetect):
+                return 'detect'
+            elif isinstance(m, SpikeDetect_TD):
+                return 'detect'
+            elif isinstance(m, Aux_SpikeDetect_TD):
                 return 'detect'
             elif isinstance(m, Segment):
                 return 'segment'

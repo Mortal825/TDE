@@ -189,6 +189,7 @@ class BasePredictor:
 
     def __call__(self, source=None, model=None, stream=False, *args, **kwargs):
         """Performs inference on an image or stream."""
+        print("hahaahaha")
         self.stream = stream
         if stream:
             return self.stream_inference(source, model, *args, **kwargs)

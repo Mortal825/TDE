@@ -142,7 +142,7 @@ def select_device(device='', batch=0, newline=False, verbose=True):
     else:  # revert to CPU
         s += f'CPU ({get_cpu_info()})\n'
         arg = 'cpu'
-
+    print(f"arg = {arg}")
     if verbose:
         LOGGER.info(s if newline else s.rstrip())
     return torch.device(arg)
