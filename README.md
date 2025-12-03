@@ -11,18 +11,16 @@
 <div style="width: 100%; text-align: center; margin:auto;">
       <img style="width: 50%" src="fig/motivation.png">
 </div>
-
-<div style="max-width: 850px; margin: auto; font-size: 16px; line-height: 1.75; text-align: left;">
-  <p>
-  Spiking Neural Networks (SNNs), with their brain-inspired spatiotemporal dynamics and spike-driven computation, have emerged as promising energy-efficient alternatives to Artificial Neural Networks (ANNs). However, existing SNNs typically replicate inputs directly or aggregate them into frames at fixed intervals. Such strategies lead to neurons receiving nearly identical stimuli across time steps, severely limiting the model's expressive power—particularly in complex tasks like object detection. In this work, we propose the Temporal Dynamics Enhancer (TDE) to strengthen SNNs' capacity for temporal information modeling. TDE consists of two modules: a Spiking Encoder (SE) that generates diverse input stimuli across time steps, and an Attention Gating Module (AGM) that guides the SE generation based on inter-temporal dependencies. Moreover, to eliminate the high-energy multiplication operations introduced by the AGM, we propose a Spike-Driven Attention (SDA) to reduce attention-related energy consumption. Extensive experiments demonstrate that TDE can be seamlessly integrated into existing SNN-based detectors and consistently outperforms state-of-the-art methods, achieving mAP@50-95 scores of 57.7% on the static PASCAL VOC dataset and 47.6% on the neuromorphic EvDET200K dataset. In terms of energy consumption, the SDA consumes only 0.240× the energy of conventional attention modules.
-  </p>
 </div>
+
+Spiking Neural Networks (SNNs), with their brain-inspired spatiotemporal dynamics and spike-driven computation, have emerged as promising energy-efficient alternatives to Artificial Neural Networks (ANNs). However, existing SNNs typically replicate inputs directly or aggregate them into frames at fixed intervals. Such strategies lead to neurons receiving nearly identical stimuli across time steps, severely limiting the model's expressive power—particularly in complex tasks like object detection. In this work, we propose the Temporal Dynamics Enhancer (TDE) to strengthen SNNs' capacity for temporal information modeling. TDE consists of two modules: a Spiking Encoder (SE) that generates diverse input stimuli across time steps, and an Attention Gating Module (AGM) that guides the SE generation based on inter-temporal dependencies. Moreover, to eliminate the high-energy multiplication operations introduced by the AGM, we propose a Spike-Driven Attention (SDA) to reduce attention-related energy consumption. Extensive experiments demonstrate that TDE can be seamlessly integrated into existing SNN-based detectors and consistently outperforms state-of-the-art methods, achieving mAP@50-95 scores of 57.7% on the static PASCAL VOC dataset and 47.6% on the neuromorphic EvDET200K dataset. In terms of energy consumption, the SDA consumes only 0.240× the energy of conventional attention modules.
+
 
 <h2>Method</h2> 
 <div style="display: flex; justify-content: center; align-items: flex-start; gap: 30px; width: 100%; margin: auto;">
     <!-- 左边图块：TDE -->
     <div style="width: 45%; text-align: left;">
-        <img src="fig/TDE3.png" style="width: 90%;" />
+        <img src="fig/TDE3.png" style="width: 50%;" />
         <div style="font-size: 14px; text-align: left; margin-top: 10px;">
             <b>TDE:</b>The Temporal Dynamics Enhancer (TDE) consists of two main components:
             the spiking encoder (SE), which generates diverse spike stimuli based on LIF dynamics,
@@ -32,7 +30,7 @@
     </div>
     <!-- 右边图块：SDA -->
     <div style="width: 45%; text-align: left;">
-        <img src="fig/SDA.png" style="width: 100%;" />
+        <img src="fig/SDA.png" style="width: 55%;" />
         <div style="font-size: 14px; text-align: left; margin-top: 10px;">
             <b>SDA:</b> Schematic of the Spike-Driven Attention. SDA uses two neuron groups 
             to avoid multiplication operations. It fuses spike and floating-point temporal, spatial, 
@@ -41,7 +39,7 @@
         </div>
     </div>
 </div>
-</div>
+
 
 ## Installation
 
