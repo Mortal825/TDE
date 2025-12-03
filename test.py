@@ -221,7 +221,7 @@ for i, (comb, freq) in enumerate(zip(combinations, frequencies)):
     plt.text(i, freq + max(frequencies) * 0.01, f"{freq:.2f}", ha='center', va='bottom', fontsize=9)
 
 plt.tight_layout()
-plt.savefig(f"{name}_first_layer_binary_combinations.png", dpi=300, bbox_inches='tight')
+plt.savefig(f"first_layer_binary_combinations.png", dpi=300, bbox_inches='tight')
 plt.close()
 
 # 保存首层直方图数据
@@ -229,7 +229,7 @@ df_first = pd.DataFrame({
     "Binary Combination": list(combination_dict_first.keys()),
     "Frequency": list(combination_dict_first.values())
 })
-df_first.to_csv(f"{name}_first_layer_binary_combinations.csv", index=False)
+df_first.to_csv(f"first_layer_binary_combinations.csv", index=False)
 
 
 
@@ -250,7 +250,7 @@ for i, (comb, freq) in enumerate(zip(combinations, frequencies)):
     plt.text(i, freq + max(frequencies) * 0.01, f"{freq:.2f}", ha='center', va='bottom', fontsize=9)
 
 plt.tight_layout()
-plt.savefig(f"{name}_last_layer_binary_combinations.png", dpi=300, bbox_inches='tight')
+plt.savefig(f"last_layer_binary_combinations.png", dpi=300, bbox_inches='tight')
 plt.close()
 
 # 保存最后一层直方图数据
@@ -258,7 +258,7 @@ df_last = pd.DataFrame({
     "Binary Combination": list(combination_dict_last.keys()),
     "Frequency": list(combination_dict_last.values())
 })
-df_last.to_csv(f"{name}_last_layer_binary_combinations.csv", index=False)
+df_last.to_csv(f"last_layer_binary_combinations.csv", index=False)
 
 ## 绘制small_att,mid_att,large_att的折线图
 small_att = np.array(small_att)
@@ -287,7 +287,7 @@ for i in range(4):
 fig.tight_layout()
 
 # 保存图形为文件
-plt.savefig(f"{name}_attention_plot_time_steps.png")
+plt.savefig(f"attention_plot_time_steps.png")
 
 
 

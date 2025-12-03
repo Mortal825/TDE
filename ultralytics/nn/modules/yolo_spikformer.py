@@ -16,7 +16,7 @@ import warnings
 from ultralytics.nn.modules.seg import MulfeatSeg
 from ultralytics.utils.tal import TORCH_1_10, dist2bbox, make_anchors
 import math
-from ultralytics.nn.modules.Attention import TCSA,CSA,Spike_TCSA
+from ultralytics.nn.modules.Attention import TCSA,Spike_TCSA
 import matplotlib.pyplot as plt
 import numpy as np
 # __all__ = ('MS_GetT','MS_CancelT', 'MS_ConvBlock','MS_Block','MS_DownSampling',
@@ -849,52 +849,6 @@ class att_MS_ConvBlock(nn.Module):
         # print(f"MS_ConvBlockout = {x.shape}")
         return x
 
-## 末尾
-# class Att_MS_ConvBlock(nn.Module):
-#     def __init__(self, input_dim, mlp_ratio=4.,sep_kernel_size = 7 ,att = 0,timestep = 4,full=False):  # in_channels(out_channels), 内部扩张比例
-#         super().__init__()
-
-#         self.full =full
-#         self.Conv = SepConv(dim=input_dim,kernel_size= sep_kernel_size)  #内部扩张2倍
-#         self.mlp_ratio = mlp_ratio
-#         self.att_flag = att
-#         self.Tsteps = timestep
-#         self.lif1 = mem_update()
-#         self.lif2 = mem_update()
-
-#         self.conv1 = RepConv(input_dim, int(input_dim * mlp_ratio)) #137以外的模型，在第一个block不做分组
-
-#         self.bn1 = nn.BatchNorm2d(int(input_dim * mlp_ratio))  # 这里可以进行改进
-
-#         self.conv2 = RepConv(int(input_dim * mlp_ratio), input_dim)
-#         self.bn2 = nn.BatchNorm2d(input_dim)  # 这里可以进行改进
-#         if(self.att_flag == 1):
-#             self.att = TCSA(self.Tsteps,input_dim)
-#         elif(self.att_flag == 2):
-#             self.att = Spike_TCSA(self.Tsteps,input_dim)
-
-
-#     # @get_local('x_feat')
-#     def forward(self, x,t_all):
-#         T, B, C, H, W = x.shape
-#         # print(f"MS_ConvBlockinput = {x.shape}")
-#         x = self.Conv(x) + x  #sepconv  pw+dw+pw
-
-#         x_feat = x
-#         x = self.bn1(self.conv1(self.lif1(x).flatten(0, 1))).reshape(T, B, int(self.mlp_ratio * C), H, W)
-#         x = self.bn2(self.conv2(self.lif2(x).flatten(0, 1))).reshape(T, B, C, H, W)
-
-#         if(self.att_flag):
-#             x,ta = self.att(x)
-#             # 对第一维度取平均值
-#             ta_mean = ta.mean(dim=0)  # 结果形状为 torch.Size([4, 1, 1, 1]
-#             for i in range(4):
-#                 t_all[i] += (ta_mean[i] / 3).item()             # 对第一维度取平均值
-            
-#         x = x_feat + x
-#         # print(f"MS_ConvBlockout = {x.shape}")
-#         return x
-    
 class Att_MS_ConvBlock(nn.Module):
     def __init__(self, input_dim, mlp_ratio=4.,sep_kernel_size = 7 ,att = 0,timestep = 4,full=False):  # in_channels(out_channels), 内部扩张比例
         super().__init__()
@@ -1088,75 +1042,6 @@ class MS_AllConvBlock(nn.Module):  # standard conv
         # print(f"MS_AllConvBlock_output = {x.shape}")
         return x
 
-
-# class att_MS_AllConvBlock(nn.Module):  # standard conv
-#     def __init__(self, input_dim, mlp_ratio=4.,sep_kernel_size = 7,att = 0,timestep = 4,group=False):  # in_channels(out_channels), 内部扩张比例
-#         super().__init__()
-
-#         self.Conv = SepConv(dim=input_dim,kernel_size= sep_kernel_size)
-#         self.att_flag = att
-#         self.Tsteps = timestep
-#         self.mlp_ratio = mlp_ratio
-#         self.conv1 = MS_StandardConv(input_dim, int(input_dim * mlp_ratio),3)
-#         self.conv2 = MS_StandardConv(int(input_dim * mlp_ratio), input_dim,3)
-#         if(self.att_flag == 1):
-#             self.att = TCSA(self.Tsteps,input_dim)
-#         elif(self.att_flag == 2):
-#             self.att = Spike_TCSA(self.Tsteps,input_dim)
-
-#     # @get_local('x_feat')
-#     def forward(self, x):
-#         T, B, C, H, W = x.shape
-
-#         x = self.Conv(x) + x  #sepconv  pw+dw+pw
-
-#         x_feat = x
-
-#         if self.att_flag:
-#             x = self.conv1(x)
-#             x = self.conv2(x)
-#             x,ta = self.att(x)
-#         else:
-#             x = self.conv1(x)
-#             x = self.conv2(x)
-
-#         x = x_feat + x
-#         # print(f"MS_AllConvBlock_output = {x.shape}")
-#         return x
-
-## 放在开头 pass
-# class MS_AllConvBlock(nn.Module):  # standard conv
-#     def __init__(self, input_dim, mlp_ratio=4.,sep_kernel_size = 7,att = 0,timestep = 4,group=False):  # in_channels(out_channels), 内部扩张比例
-#         super().__init__()
-
-#         self.Conv = SepConv(dim=input_dim,kernel_size= sep_kernel_size)
-#         self.att_flag = att
-#         self.Tsteps = timestep
-#         self.mlp_ratio = mlp_ratio
-#         self.conv1 = MS_StandardConv(input_dim, int(input_dim * mlp_ratio),3)
-#         self.conv2 = MS_StandardConv(int(input_dim * mlp_ratio), input_dim,3)
-#         if(self.att_flag == 1):
-#             self.att = TCSA(self.Tsteps,input_dim)
-#         elif(self.att_flag == 2):
-#             self.att = Spike_TCSA(self.Tsteps,input_dim)
-
-#     # @get_local('x_feat')
-#     def forward(self, x):
-#         T, B, C, H, W = x.shape
-#         if self.att_flag:
-#             x,ta = self.att(x)
-
-#         x = self.Conv(x) + x  #sepconv  pw+dw+pw
-
-#         x_feat = x
-
-#         x = self.conv1(x)
-#         x = self.conv2(x)
-
-#         x = x_feat + x
-#         # print(f"MS_AllConvBlock_output = {x.shape}")
-#         return x
-
 class att_MS_AllConvBlock(nn.Module):  # standard conv
     def __init__(self, input_dim, mlp_ratio=4.,sep_kernel_size = 7,att = 0,timestep = 4,group=False):  # in_channels(out_channels), 内部扩张比例
         super().__init__()
@@ -1188,44 +1073,6 @@ class att_MS_AllConvBlock(nn.Module):  # standard conv
             x,ta = self.att(x)
         # print(f"MS_AllConvBlock_output = {x.shape}")
         return x
-
-
-## 这里还没改
-# class Att_MS_AllConvBlock(nn.Module):  # standard conv
-#     def __init__(self, input_dim, mlp_ratio=4.,sep_kernel_size = 7,att = 0,timestep = 4,group=False):  # in_channels(out_channels), 内部扩张比例
-#         super().__init__()
-
-#         self.Conv = SepConv(dim=input_dim,kernel_size= sep_kernel_size)
-#         self.att_flag = att
-#         self.Tsteps = timestep
-#         self.mlp_ratio = mlp_ratio
-#         self.conv1 = MS_StandardConv(input_dim, int(input_dim * mlp_ratio),3)
-#         self.conv2 = MS_StandardConv(int(input_dim * mlp_ratio), input_dim,3)
-#         if(self.att_flag == 1):
-#             self.att = TCSA(self.Tsteps,input_dim)
-#         elif(self.att_flag == 2):
-#             self.att = Spike_TCSA(self.Tsteps,input_dim)
-
-#     # @get_local('x_feat')
-#     def forward(self, x,t_all):
-#         T, B, C, H, W = x.shape
-#         x = self.Conv(x) + x  #sepconv  pw+dw+pw
-
-#         x_feat = x
-#         x = self.conv1(x)
-#         x = self.conv2(x)
-
-#         if self.att_flag:
-#             x,ta = self.att(x)
-#             # 对第一维度取平均值
-#             ta_mean = ta.mean(dim=0)  # 结果形状为 torch.Size([4, 1, 1, 1]
-#             for i in range(4):
-#                 t_all[i] += (ta_mean[i] / 3).item() 
-            
-
-#         x = x_feat + x
-#         # print(f"MS_AllConvBlock_output = {x.shape}")
-#         return x
 
 class Att_MS_AllConvBlock(nn.Module):  # standard conv
     def __init__(self, input_dim, mlp_ratio=4.,sep_kernel_size = 7,att = 0,timestep = 4,group=False):  # in_channels(out_channels), 内部扩张比例
@@ -1380,11 +1227,10 @@ class Co_Diff_GetT(nn.Module):
         outputs = []
         # 逐步通过时间模块生成剩余时间步特征 记得检查目前是否采用了快捷连接
         current_feature = base_feature
-
         for t in range(self.T):
             current_feature = self.time_modules[t](current_feature)  # 通过对应时间步模块
             t_all_t = t_all[t].to(current_feature.device)
-            current_feature = 0.1 * self.alpha_base * base_feature * (1 - t_all_t) + self.alpha_current * current_feature * t_all_t
+            current_feature = self.alpha_base * base_feature * (1 - t_all_t) + self.alpha_current * current_feature * t_all_t
             outputs.append(current_feature.unsqueeze(0))  # 添加时间维度
             # average_image = current_feature[0].mean(dim=0).detach().cpu().numpy()
 
@@ -1442,45 +1288,6 @@ class Diff_GetT(nn.Module):
 
         # 将所有时间步的输出组合
         return torch.cat(outputs, dim=0)  # 输出形状为 (T, B, C, H, W)
-
-# # 无
-# class Diff_GetT(nn.Module):
-#     def __init__(self, in_channels=2, embed_dims=256, kernel_size=3, stride=2, padding=1, T=4,t_kernel_size = 3,t_stride = 1,t_pading = 1):
-#         super().__init__()
-#         self.T = T
-#         self.embed_dims = embed_dims
-#         self.in_channels = in_channels
-
-#         # 实例化 T-1 个 generate_T 对象
-#         self.time_modules = nn.ModuleList([
-#             generate_T(embed_dims, embed_dims, t_kernel_size, t_stride, t_pading)
-#             for _ in range(T - 1)
-#         ])
-
-#         # 最后一层卷积
-#         self.encode_conv = nn.Conv2d(in_channels, embed_dims, kernel_size=kernel_size, stride=stride, padding=padding)
-#         self.encode_bn = nn.BatchNorm2d(embed_dims)
-#         self.act = nn.ReLU()  # 修正为赋值
-
-#     def forward(self, x):
-#         B, C, H, W = x.shape  # 输入形状没有时间维度
-
-#         # 应用最后一层卷积作为初始特征提取
-#         base_feature = self.act(self.encode_bn(self.encode_conv(x)))  # (B, embed_dims, H', W')
-#         # print(f"base_feature = {base_feature.shape}")
-
-#         # 初始化输出列表
-#         outputs = [base_feature.unsqueeze(0)]  # 添加第一个时间步的特征
-
-#         # 逐步通过时间模块生成剩余时间步特征 记得检查目前是否采用了快捷连接
-
-#         current_feature = base_feature
-#         for t in range(self.T - 1):
-#             current_feature = self.time_modules[t](current_feature)  # 通过对应时间步模块
-#             outputs.append(current_feature.unsqueeze(0))  # 添加时间维度
-
-#         # 将所有时间步的输出组合
-#         return torch.cat(outputs, dim=0)  # 输出形状为 (T, B, C, H, W)
 
 class MS_CancelT(nn.Module):
     def __init__(self, in_channels=1, out_channels=1, T=2):

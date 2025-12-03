@@ -101,29 +101,22 @@ class BaseModel(nn.Module):
                 self._profile_one_layer(m, x, dt)
             if(m.__class__.__name__ == "Co_Diff_GetT"):
                 # x = m(x)
-
                 ## 联合注意力版本1
-                if self.training:
-                    if(self.lenqueue < 10):
-                        self.lenqueue += 1
-                        x = m(x,self.shared_params)                        
-                        self.past_data.append(self.shared_params)
-                        self.shared_params = [torch.tensor(0.0) for _ in self.shared_params]
-                    else:
-                        self.past_data.append(self.shared_params)
-                        self.shared_params = self.average_scheme(self.past_data)
-                        x = m(x,self.shared_params)
-
-                        for i, param in enumerate(self.attention):
-                            param.data = self.shared_params[i].clone().to(x.device)
-
-                        self.shared_params = [torch.tensor(0.0) for _ in self.shared_params]
+                if(self.lenqueue < 10):
+                    self.lenqueue += 1
+                    x = m(x,self.shared_params)                        
+                    self.past_data.append(self.shared_params)
+                    self.shared_params = [torch.tensor(0.0) for _ in self.shared_params]
                 else:
-                    self.shared_params = [
-                        param.clone().detach()  # 创建一个副本，并确保不会参与梯度更新
-                        for param in self.attention
-                    ]
+                    self.past_data.append(self.shared_params)
+                    self.shared_params = self.average_scheme(self.past_data)
+                    print("self.shared_params=",self.shared_params)
                     x = m(x,self.shared_params)
+
+                    for i, param in enumerate(self.attention):
+                        param.data = self.shared_params[i].clone().to(x.device)
+
+                    self.shared_params = [torch.tensor(0.0) for _ in self.shared_params]
 
                 ## 联合注意力版本2
                 # x = m(x,self.shared_params)
@@ -296,12 +289,13 @@ class DetectionModel(BaseModel):
             torch.tensor(1.0),
         ]
 
-        # 初始化并注册为 buffer（不训练）
-        for i, v in enumerate([1.0, 1.0, 1.0, 1.0]):
-            self.register_buffer(f"attention_{i}", torch.tensor(v))
+        if(self.training):
+            # 初始化并注册为 buffer（不训练）
+            for i, v in enumerate([1.0, 1.0, 1.0, 1.0]):
+                self.register_buffer(f"attention_{i}", torch.tensor(v))
 
-        # 将它们存入 self.attention 列表
-        self.attention = [getattr(self, f"attention_{i}") for i in range(4)]
+            # 将它们存入 self.attention 列表
+            self.attention = [getattr(self, f"attention_{i}") for i in range(4)]
 
 
         # Define model
@@ -318,13 +312,13 @@ class DetectionModel(BaseModel):
         m = self.model[-1]  # Detect()
         if isinstance(m, (Detect, Segment, Pose,SpikeDetect,SpikeDetect_TD,Aux_SpikeDetect_TD)):
             ## 测试模型参数
-            s = 640  # 2x min stride
+            s = 320  # 2x min stride
             m.inplace = self.inplace
             forward = lambda x: self.forward(x)[0] if isinstance(m, (Segment, Pose)) else self.forward(x)
             m.stride = torch.tensor([s / x.shape[-2] for x in forward(torch.zeros(1, ch, s, s).cuda())])  # forward
             with torch.no_grad():
                 # Perform forward pass with a dummy tensor of shape (4, ch, s, s)
-                dummy_input = torch.zeros(2, ch, s, s).cuda()  # Create tensor on GPU
+                dummy_input = torch.zeros(1, ch, s, s).cuda()  # Create tensor on GPU
                 output = forward(dummy_input)  # Perform forward pass
                 
                 # Calculate the stride

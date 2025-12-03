@@ -9,23 +9,30 @@ warnings.filterwarnings("ignore", category=UserWarning)
 os.environ['WANDB_DISABLED'] = 'true'
 
 # baseline
-model = YOLO("./config/snn_yolov8s.yaml")  #使用基线方式
-# TCSA
-model = YOLO("./config/TCSA_yolov8s.yaml")
-# SDA
-model = YOLO("./config/SDA_yolov8s.yaml")
-# SE
-model = YOLO("./config/SE_yolov8s.yaml")
-# TDE(TCSA)
-model = YOLO("./config/TDE(TCSA)_yolov8s.yaml")
-# TDE(SDA)
-model = YOLO("./config/TDE(SDA)_yolov8s.yaml")
+# model = YOLO("./config/snn_yolov8s.yaml")  #使用基线方式
+# # TCSA
+# model = YOLO("./config/TCSA_yolov8s.yaml")
+# # SDA
+# model = YOLO("./config/SDA_yolov8s.yaml")
+# # SE
+# model = YOLO("./config/SE_yolov8s.yaml")
+# # TDE(TCSA) 有注意力门控
+# model = YOLO("./config/TDE(TCSA)_yolov8s.yaml")
+# # TDE(SDA) 有注意力门控
+# model = YOLO("./config/TDE(SDA)_yolov8s.yaml")
+# SE + SDA 没有注意力门控
+# model = YOLO("./config/SDA+SE_yolov8s.yaml")
+# SE + TCSA 没有注意力门控
+model = YOLO("./config/TCSA+SE_yolov8s.yaml")
 
 # EvDET200K
-model.train(data="./config/EvDET200K.yaml",device=[0,1],epochs=100,batch=12) 
+# model.train(data="./config/EvDET200K.yaml",device=[0,1],epochs=100,batch=12) 
 
 # VOC
 # model.train(data="./config/VOC.yaml",device=[0,1],epochs=100,batch=12) 
 
 # # VOC2007
-# model.train(data="./config/VOC07.yaml",device=[0,1],epochs=100,batch=12) 
+# model.train(data="./config/VOC07.yaml",device=[0,1],epochs=300,batch=12) 
+
+# # COCO
+model.train(data="./config/coco.yaml",device=[0,1,2,3],epochs=50,batch=12) 
