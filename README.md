@@ -20,7 +20,7 @@ Spiking Neural Networks (SNNs), with their brain-inspired spatiotemporal dynamic
 <div style="display: flex; justify-content: center; align-items: flex-start; gap: 30px; width: 100%; margin: auto;">
     <!-- 左边图块：TDE -->
     <div style="width: 45%; text-align: left;">
-        <img src="fig/TDE3.png" style="width: 50%;" />
+        <img src="fig/TDE3.png" style="width: 90%;" />
         <div style="font-size: 14px; text-align: left; margin-top: 10px;">
             <b>TDE:</b>The Temporal Dynamics Enhancer (TDE) consists of two main components:
             the spiking encoder (SE), which generates diverse spike stimuli based on LIF dynamics,
@@ -30,7 +30,7 @@ Spiking Neural Networks (SNNs), with their brain-inspired spatiotemporal dynamic
     </div>
     <!-- 右边图块：SDA -->
     <div style="width: 45%; text-align: left;">
-        <img src="fig/SDA.png" style="width: 55%;" />
+        <img src="fig/SDA.png" style="width: 100%;" />
         <div style="font-size: 14px; text-align: left; margin-top: 10px;">
             <b>SDA:</b> Schematic of the Spike-Driven Attention. SDA uses two neuron groups 
             to avoid multiplication operations. It fuses spike and floating-point temporal, spatial, 
